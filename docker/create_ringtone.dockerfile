@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -24,7 +25,7 @@ COPY voice_clips/morgan_freeman ./voice_clips/morgan_freeman
 COPY voice_clips/seth_rogan ./voice_clips/seth_rogan
 COPY voice_clips/Trump ./voice_clips/Trump
 
-# Create directories for runtime mounts
-RUN mkdir -p /app/voice_clips/caller /app/voice_clips/output
+# Create directory for runtime mount
+RUN mkdir -p /app
 
 ENTRYPOINT ["python", "create_ringtone.py"]

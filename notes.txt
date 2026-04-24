@@ -1,0 +1,11 @@
+docker run --rm --gpus all --network host \
+  -v /home/viktor-isaksen/Desktop/TTS:/app \
+    create-ringtone:latest \
+    --caller_voice voice_clips_tester/Friends/Mille/mille_high_pitch.mp3 \
+    --probability 0.7 \
+    --output voice_clips/output/
+
+language detector would be really nice to know if prompt should be written in danish or english.
+
+feeling detector would be nice as well so I can understand which mood people are in and generate a script in the same mood.
+

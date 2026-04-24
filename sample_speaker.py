@@ -19,10 +19,10 @@ def _audio_files_in_dir(folder: Path):
 
 
 def sample_speaker(p=0.5, voice_clips_dir="voice_clips", exclude=("Friends", "output", "caller"), caller_speech = False):
-    if random.random() < p and caller_speech: # only use caller voice if a clip is available (caller_speech=wav contents).
+    if random.random() < p and caller_speech: # only use caller voice if a clip is available (caller_speech=path).
         person = "caller"
         famous_person = False
-        voice_path = None # TODO: find out how to use caller speech
+        voice_path = caller_speech  # Use the provided caller voice path
 
     else:
         base_dir = Path(__file__).resolve().parent / voice_clips_dir
