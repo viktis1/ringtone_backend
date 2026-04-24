@@ -14,6 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
+COPY main.py .
 COPY create_ringtone.py .
 COPY sample_speaker.py .
 COPY generate_script.py .
@@ -28,4 +29,6 @@ COPY voice_clips/Trump ./voice_clips/Trump
 # Create directory for runtime mount
 RUN mkdir -p /app
 
-ENTRYPOINT ["python", "create_ringtone.py"]
+# Expose port 8080 for Cloud Run
+EXPOSE 8080
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

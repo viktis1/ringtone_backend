@@ -1,3 +1,5 @@
 voice_clips_tester/
 __pycache__/
 .vscode/
+ghcr-key.json
+voice_clips/output/
