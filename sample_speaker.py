@@ -10,7 +10,15 @@ from pathlib import Path
 import random
 
 
-def sample_speaker(p=0.5, voice_clips_dir="voice_clips", exclude=("Friends",), caller_speech = False):
+def _audio_files_in_dir(folder: Path):
+    files = []
+    for path in folder.iterdir():
+        if path.is_file() and path.suffix.lower() in {".wav", ".mp3"}:
+            files.append(path)
+    return files
+
+
+def sample_speaker(p=0.5, voice_clips_dir="voice_clips", exclude=("Friends", "output", "caller"), caller_speech = False):
     if random.random() < p and caller_speech: # only use caller voice if a clip is available (caller_speech=wav contents).
         person = "caller"
         famous_person = False
@@ -18,14 +26,24 @@ def sample_speaker(p=0.5, voice_clips_dir="voice_clips", exclude=("Friends",), c
 
     else:
         base_dir = Path(__file__).resolve().parent / voice_clips_dir
-        people = [
-            folder.name
-            for folder in base_dir.iterdir()
-            if folder.is_dir() and folder.name not in set(exclude)
-        ]
+        people = []
+        audio_files_by_person = {}
+        exclude_set = set(exclude)
+
+        for folder in base_dir.iterdir():
+            if not folder.is_dir() or folder.name in exclude_set:
+                continue
+            audio_files = _audio_files_in_dir(folder)
+            if audio_files:
+                people.append(folder.name)
+                audio_files_by_person[folder.name] = audio_files
+
+        if not people:
+            raise RuntimeError(f"No usable audio clips found in {base_dir}. Add .wav or .mp3 files.")
+
         person = random.choice(people)
         famous_person = True
-        audio_files = list((base_dir / person).glob("*.wav")) + list((base_dir / person).glob("*.mp3"))
+        audio_files = audio_files_by_person[person]
         voice_path = random.choice(audio_files)
 
     return person, famous_person, voice_path

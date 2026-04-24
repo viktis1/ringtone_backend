@@ -1,0 +1,10 @@
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+huggingface_hub==1.10.2
+requests==2.33.1
+soundfile==0.13.1
+torch==2.11.0
+torchaudio==2.11.0
+torchvision==0.26.0
+tqdm==4.67.3
+voxcpm==2.0.2

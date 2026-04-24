@@ -1,8 +1,10 @@
 import requests
+import os
 
 
 def generate_script(receiver, caller, speaker, feeling=None, famous_person=True):
-    url = "http://localhost:11434/api/generate"
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    url = f"{base_url.rstrip('/')}/api/generate"
 
     if feeling is not None:
         feeling_prompt = f" The emotion of the speaker should be {feeling}."

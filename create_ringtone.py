@@ -7,6 +7,7 @@ import torch
 
 torch.set_float32_matmul_precision('high') # Does this do something? Idk what it is
 
+print("torch.cuda.is_available():", torch.cuda.is_available())
 
 
 def create_ringtone(text, reference_wav_path, output_path):
