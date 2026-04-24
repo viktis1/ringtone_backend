@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - GCP_dependency_workflow
     paths:
       - 'docker/**'
       - 'create_ringtone.py'
