@@ -72,6 +72,8 @@ jobs:
             --region europe-north2 \
             --memory 24Gi \
             --cpu 6 \
+            # --gpu nvidia-l4 \
+            # --gpu-count 1 \
             --timeout 3600 \
             --no-allow-unauthenticated \
             --quiet
