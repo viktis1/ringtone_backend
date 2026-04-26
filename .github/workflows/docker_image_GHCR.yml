@@ -70,8 +70,8 @@ jobs:
             --image ghcr.io/${{ github.repository_owner }}/create-ringtone:latest \
             --service-account ghcr-puller@ringtonechanger-494218.iam.gserviceaccount.com \
             --region europe-north2 \
-            --memory 8Gi \
-            --cpu 4 \
+            --memory 24Gi \
+            --cpu 6 \
             --timeout 3600 \
             --no-allow-unauthenticated \
             --quiet
