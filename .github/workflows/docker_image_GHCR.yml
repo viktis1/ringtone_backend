@@ -67,13 +67,17 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy create-ringtone \
-            --image ghcr.io/${{ github.repository_owner }}/create-ringtone:latest \
+            --image europe-north2-docker.pkg.dev/ringtonechanger-494218/ghcr-mirror/viktis1/create-ringtone:latest \
             --service-account ghcr-puller@ringtonechanger-494218.iam.gserviceaccount.com \
             --region europe-north2 \
             --memory 24Gi \
             --cpu 6 \
-            # --gpu nvidia-l4 \
-            # --gpu-count 1 \
             --timeout 3600 \
+            --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
             --no-allow-unauthenticated \
             --quiet
+            # --gpu nvidia-l4 \
+            # --gpu-count 1 \
+            
+            
+            
