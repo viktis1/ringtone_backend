@@ -1,17 +1,21 @@
-FROM python:3.13-slim
+FROM nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
 
-WORKDIR /app
 
-# Install system dependencies for audio processing and PyTorch
+# Install system dependencies and python
 RUN apt-get update && apt-get install -y \
+    python3.12 \
+    python3-pip \
     build-essential \
     git \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/python3.12 /usr/bin/python
 
-# Copy requirements and install dependencies
+WORKDIR /app
+
+# Copy requirements and install dependencies. Without --break-system-packages, I get an error with this base image...
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt 
 
 # Copy application code
 COPY main.py .
