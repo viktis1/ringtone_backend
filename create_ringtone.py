@@ -12,10 +12,11 @@ torch.set_float32_matmul_precision('high') # Does this do something? Idk what it
 print("torch.cuda.is_available():", torch.cuda.is_available())
 
 
-def create_ringtone(text, reference_wav_path, output_path):
+def create_ringtone(text, reference_wav_path, output_path, model_path=None):
     model = VoxCPM.from_pretrained(
         "openbmb/VoxCPM2",
         load_denoiser=False,
+        cache_dir=model_path 
     )
 
     wav = model.generate(

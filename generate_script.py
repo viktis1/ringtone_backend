@@ -1,10 +1,14 @@
-import requests
 import os
+from google import genai
 
 
 def generate_script(receiver, caller, speaker, feeling=None, famous_person=True):
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    url = f"{base_url.rstrip('/')}/api/generate"
+    # Configure Gemini API
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable not set")
+    
+    client = genai.Client(api_key=api_key)
 
     if feeling is not None:
         feeling_prompt = f" The emotion of the speaker should be {feeling}."
@@ -33,18 +37,13 @@ def generate_script(receiver, caller, speaker, feeling=None, famous_person=True)
         f"receiver ({receiver}). However, the inclusion of the names should be natural and not forced."
     )
     
-    payload = {
-        "model": "qwen3.5:9b",   # pick from ["qwen3.6", "medgemma1.5", "glm-5.1"]
-        "prompt":  prompt + feeling_prompt + famous_person_prompt,
-        "stream": False
-    }
-    # print(prompt + feeling_prompt + famous_person_prompt)
+    full_prompt = prompt + feeling_prompt + famous_person_prompt
 
-    response = requests.post(url, json=payload)
-    response.raise_for_status()
-
-    data = response.json()
-    return data["response"]
+    response = client.models.generate_content(
+        model="gemini-flash-latest",
+        contents=full_prompt
+    )
+    return response.text
 
 
 

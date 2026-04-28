@@ -9,3 +9,10 @@ language detector would be really nice to know if prompt should be written in da
 
 feeling detector would be nice as well so I can understand which mood people are in and generate a script in the same mood.
 
+I might want to explore setting up a bucket per user, so the first bucket was set up like
+gcloud storage buckets create gs://ringtone-bucket-user1 \
+    --enable-autoclass \
+    --autoclass-terminal-storage-class=ARCHIVE \
+    --location=EUROPE-WEST1 \
+    --uniform-bucket-level-access \
+    --public-access-prevention
