@@ -76,7 +76,7 @@ jobs:
             --gpu 1 \
             --no-gpu-zonal-redundancy \
             --timeout 3600 \
-            --set-env-vars GCS_BUCKET=my-ringtone-bucket,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+            --set-env-vars GCS_BUCKET=contact-info-bucket,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
             --no-allow-unauthenticated \
             --quiet
             

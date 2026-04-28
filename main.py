@@ -17,7 +17,7 @@ from utils import get_ringtone_output_path
 # Config
 # ---------------------------------------------------------------------------
 
-GCS_BUCKET     = os.environ["GCS_BUCKET"]          # e.g. "my-ringtone-bucket"
+GCS_BUCKET     = os.environ["GCS_BUCKET"]          # e.g. "contact-info-bucket"
 UPLOAD_PREFIX  = "uploads"                          # contacts/{user_id}/...
 OUTPUT_PREFIX  = "ringtones"                        # ringtones/{user_id}/...
 URL_TTL        = timedelta(minutes=15)
