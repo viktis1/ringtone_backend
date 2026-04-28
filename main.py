@@ -2,7 +2,8 @@ import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-
+ 
+import google.auth
 import torch
 from fastapi import FastAPI, HTTPException
 from google.cloud import storage
@@ -21,6 +22,7 @@ GCS_BUCKET     = os.environ["GCS_BUCKET"]          # e.g. "contact-info-bucket"
 UPLOAD_PREFIX  = "uploads"                          # contacts/{user_id}/...
 OUTPUT_PREFIX  = "ringtones"                        # ringtones/{user_id}/...
 URL_TTL        = timedelta(minutes=15)
+SERVICE_ACCOUNT_EMAIL = "ghcr-puller@ringtonechanger-494218.iam.gserviceaccount.com"
 
 gcs = storage.Client()
 bucket = gcs.bucket(GCS_BUCKET)
@@ -32,29 +34,43 @@ app = FastAPI()
 # GCS helpers
 # ---------------------------------------------------------------------------
 
+
+def _get_fresh_token() -> str:
+    """Return a fresh ADC access token for use in keyless signed URLs."""
+    credentials, _ = google.auth.default()
+    credentials.refresh(google.auth.transport.requests.Request())
+    return credentials.token
+ 
+ 
 def signed_upload_url(blob_path: str) -> str:
     return bucket.blob(blob_path).generate_signed_url(
         version="v4",
         expiration=URL_TTL,
         method="PUT",
         content_type="application/octet-stream",
+        service_account_email=SERVICE_ACCOUNT_EMAIL,
+        access_token=_get_fresh_token(),
     )
-
+ 
 def signed_download_url(blob_path: str) -> str:
     return bucket.blob(blob_path).generate_signed_url(
         version="v4",
         expiration=URL_TTL,
         method="GET",
+        service_account_email=SERVICE_ACCOUNT_EMAIL,
+        access_token=_get_fresh_token(),
     )
-
+ 
 def download_blob_to_tempfile(blob_path: str, suffix: str = "") -> str:
     """Download a GCS blob to a local temp file; returns the temp file path."""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     bucket.blob(blob_path).download_to_filename(tmp.name)
     return tmp.name
-
+ 
 def upload_file_to_gcs(local_path: str, blob_path: str) -> None:
     bucket.blob(blob_path).upload_from_filename(local_path)
+
+
 
 
 # ---------------------------------------------------------------------------

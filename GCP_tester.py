@@ -1,217 +1,139 @@
-#!/usr/bin/env python3
 """
-Test script for the TTS ringtone generation API on GCP.
-Uploads a test voice clip, generates a ringtone, and downloads the result.
+GCP_tester.py — End-to-end test for the ringtone Cloud Run service.
+
+Flow:
+    0. GET /health                  →  verify service is reachable
+    1. Request a signed upload URL  →  PUT local .mp3 to GCS
+    2. POST /generate               →  trigger ringtone synthesis
+    3. Request a signed download URL →  GET finished .wav to disk
 """
 
-import os
+import subprocess
 import sys
-import requests
 from pathlib import Path
-from google.cloud import storage
 
-# ============================================================================
-# Configuration
-# ============================================================================
+import requests
 
-# Cloud Run endpoint (set this to your actual Cloud Run URL)
-CLOUD_RUN_URL = os.environ.get("CLOUD_RUN_URL", "https://create-ringtone-996521322298.europe-west1.run.app")
-GCS_BUCKET = os.environ.get("GCS_BUCKET", "contact-info-bucket") # Must match the bucket used by the Cloud Run service
-USER_ID = "tester"  # Test user ID
+# ---------------------------------------------------------------------------
+# Config — edit these two lines
+# ---------------------------------------------------------------------------
 
-# Local paths
-INPUT_FILE = Path("voice_clips_tester/Friends/Mille/mille_high_pitch.mp3")
-OUTPUT_DIR = Path("voice_clips_tester/output_GCP")
-OUTPUT_FILE = OUTPUT_DIR / "mille_high_pitch.wav"
+SERVICE_URL = "https://create-ringtone-996521322298.europe-west1.run.app"   # no trailing slash
+USER_ID     = "tester"
 
-# ============================================================================
-# Helpers
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
 
-def ensure_output_dir():
-    """Create output directory if it doesn't exist."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"✓ Output directory ready: {OUTPUT_DIR}")
+UPLOAD_FILE   = Path("voice_clips_tester/Friends/Mille/mille_high_pitch.mp3")
+OUTPUT_FILE   = Path("voice_clips_tester/output_GCP/mille_high_pitch.wav")
+UPLOAD_NAME   = "mille_high_pitch.mp3"
+OUTPUT_NAME   = "mille_tester.wav"           # must match what /generate writes
 
-def file_exists(path: Path) -> bool:
-    """Check if a file exists."""
-    if not path.exists():
-        print(f"✗ File not found: {path}")
-        return False
-    print(f"✓ File found: {path}")
-    return True
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
 
-def upload_to_gcs_via_api(local_path: str, user_id: str, filename: str) -> str:
-    """
-    Step 1: Get signed upload URL from API, then upload file to GCS.
-    Returns the blob path on success.
-    """
-    print(f"\n--- Step 1: Upload voice clip ---")
-    
-    # Request signed upload URL
-    upload_url_resp = requests.post(
-        f"{CLOUD_RUN_URL}/upload-url",
-        json={"user_id": user_id, "filename": filename}
+def get_identity_token() -> str:
+    result = subprocess.run(
+        ["gcloud", "auth", "print-identity-token"],
+        capture_output=True, text=True, check=True,
     )
-    if upload_url_resp.status_code != 200:
-        print(f"✗ Failed to get upload URL: {upload_url_resp.status_code}")
-        print(f"  Response: {upload_url_resp.text}")
-        sys.exit(1)
-    
-    data = upload_url_resp.json()
-    signed_url = data["upload_url"]
-    blob_path = data["blob_path"]
-    print(f"✓ Got signed upload URL")
-    print(f"  Blob path: {blob_path}")
-    
-    # Upload file to GCS using signed URL
-    with open(local_path, "rb") as f:
-        file_data = f.read()
-    
-    upload_resp = requests.put(signed_url, data=file_data)
-    if upload_resp.status_code != 200:
-        print(f"✗ Failed to upload to GCS: {upload_resp.status_code}")
-        print(f"  Response: {upload_resp.text}")
-        sys.exit(1)
-    
-    print(f"✓ Uploaded {len(file_data)} bytes to GCS")
+    return result.stdout.strip()
+
+def headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+# ---------------------------------------------------------------------------
+# Steps
+# ---------------------------------------------------------------------------
+
+def step0_health(token: str) -> None:
+    print("\n[0/3] Checking service health ...")
+    resp = requests.get(
+        f"{SERVICE_URL}/health",
+        headers=headers(token),
+    )
+    resp.raise_for_status()
+    print(f"      ✓ Health: {resp.json()}")
+
+def step1_upload(token: str, upload_file: Path) -> str:
+    print(f"\n[1/3] Requesting signed upload URL for '{upload_file.name}' ...")
+    resp = requests.post(
+        f"{SERVICE_URL}/upload-url",
+        json={"user_id": USER_ID, "filename": UPLOAD_NAME},
+        headers=headers(token),
+    )
+    if resp.status_code != 200:
+        print(f"      ✗ Error {resp.status_code}: {resp.text}")
+    resp.raise_for_status()
+    data = resp.json()
+    upload_url = data["upload_url"]
+    blob_path  = data["blob_path"]
+
+    print(f"      Uploading {upload_file} → GCS ...")
+    with open(upload_file, "rb") as f:
+        put = requests.put(
+            upload_url,
+            data=f,
+            headers={"Content-Type": "application/octet-stream"},
+        )
+    put.raise_for_status()
+    print(f"      ✓ Uploaded  (blob: {blob_path})")
     return blob_path
 
-def generate_ringtone(caller_voice_blob: str, probability: float = 0.5) -> dict:
-    """
-    Step 2: Call /generate endpoint to synthesize the ringtone.
-    Returns response JSON with output_blob path.
-    """
-    print(f"\n--- Step 2: Generate ringtone ---")
-    
-    generate_resp = requests.post(
-        f"{CLOUD_RUN_URL}/generate",
+
+def step2_generate(token: str, blob_path: str) -> str:
+    print("\n[2/3] Triggering ringtone generation ...")
+    resp = requests.post(
+        f"{SERVICE_URL}/generate",
         json={
-            "user_id": USER_ID,
-            "caller_voice_blob": caller_voice_blob,
-            "probability": probability
-        }
+            "user_id":           USER_ID,
+            "caller_voice_blob": blob_path,
+            "probability":       0.5,
+        },
+        headers=headers(token),
+        timeout=120,   # generation can take a while
     )
-    
-    if generate_resp.status_code != 200:
-        print(f"✗ Failed to generate ringtone: {generate_resp.status_code}")
-        print(f"  Response: {generate_resp.text}")
-        sys.exit(1)
-    
-    result = generate_resp.json()
-    print(f"✓ Ringtone generated successfully")
-    print(f"  Speaker: {result.get('speaker')}")
-    print(f"  Famous person: {result.get('famous_person')}")
-    print(f"  Output blob: {result.get('output_blob')}")
-    
-    return result
+    resp.raise_for_status()
+    data = resp.json()
+    print(f"      ✓ Done  (speaker: {data['speaker']}, famous_person: {data['famous_person']})")
+    print(f"        output blob: {data['output_blob']}")
+    return data["output_blob"]
 
-def download_from_gcs_via_api(user_id: str, filename: str, output_path: Path) -> None:
-    """
-    Step 3: Get signed download URL from API, then download file from GCS.
-    """
-    print(f"\n--- Step 3: Download ringtone ---")
-    
-    # Request signed download URL
-    download_url_resp = requests.post(
-        f"{CLOUD_RUN_URL}/download-url",
-        json={"user_id": user_id, "filename": filename}
+
+def step3_download(token: str, output_file: Path) -> None:
+    print(f"\n[3/3] Requesting signed download URL for '{OUTPUT_NAME}' ...")
+    resp = requests.post(
+        f"{SERVICE_URL}/download-url",
+        json={"user_id": USER_ID, "filename": OUTPUT_NAME},
+        headers=headers(token),
     )
-    
-    if download_url_resp.status_code != 200:
-        print(f"✗ Failed to get download URL: {download_url_resp.status_code}")
-        print(f"  Response: {download_url_resp.text}")
-        sys.exit(1)
-    
-    data = download_url_resp.json()
-    signed_url = data["download_url"]
-    print(f"✓ Got signed download URL")
-    
-    # Download file from GCS using signed URL
-    download_resp = requests.get(signed_url)
-    if download_resp.status_code != 200:
-        print(f"✗ Failed to download from GCS: {download_resp.status_code}")
-        sys.exit(1)
-    
-    # Write to local file
-    output_path.write_bytes(download_resp.content)
-    print(f"✓ Downloaded {len(download_resp.content)} bytes")
-    print(f"  Saved to: {output_path}")
+    resp.raise_for_status()
+    download_url = resp.json()["download_url"]
 
-def health_check() -> bool:
-    """Check if the API is running."""
-    print(f"\n--- Health check ---")
-    try:
-        resp = requests.get(f"{CLOUD_RUN_URL}/health", timeout=5)
-        if resp.status_code == 200:
-            print(f"✓ API is healthy")
-            return True
-    except requests.exceptions.RequestException as e:
-        print(f"✗ API is not reachable: {e}")
-        return False
-    
-    return False
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    print(f"      Downloading → {output_file} ...")
+    with requests.get(download_url, stream=True) as r:
+        r.raise_for_status()
+        with open(output_file, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    print(f"      ✓ Saved  ({output_file.stat().st_size / 1024:.1f} KB)")
 
-# ============================================================================
+# ---------------------------------------------------------------------------
 # Main
-# ============================================================================
-
-def main():
-    print("=" * 70)
-    print("TTS Ringtone Generation API - GCP Tester")
-    print("=" * 70)
-    
-    print(f"\nConfiguration:")
-    print(f"  Cloud Run URL: {CLOUD_RUN_URL}")
-    print(f"  GCS Bucket: {GCS_BUCKET}")
-    print(f"  User ID: {USER_ID}")
-    
-    # Health check
-    if not health_check():
-        print("\n✗ Cannot reach the API. Make sure:")
-        print("  1. Cloud Run service is deployed")
-        print("  2. CLOUD_RUN_URL is correct")
-        print("  3. You have network access to the service")
-        sys.exit(1)
-    
-    # Validate input file
-    if not file_exists(INPUT_FILE):
-        sys.exit(1)
-    
-    # Prepare output directory
-    ensure_output_dir()
-    
-    # Run the workflow
-    try:
-        # Step 1: Upload
-        blob_path = upload_to_gcs_via_api(
-            str(INPUT_FILE),
-            USER_ID,
-            "mille_high_pitch.mp3"
-        )
-        
-        # Step 2: Generate
-        result = generate_ringtone(blob_path, probability=0.5)
-        output_blob = result["output_blob"]
-        speaker = result["speaker"]
-        
-        # Step 3: Download
-        download_from_gcs_via_api(
-            USER_ID,
-            f"{speaker}_ringtone.wav",
-            OUTPUT_FILE
-        )
-        
-        print(f"\n" + "=" * 70)
-        print("✓ Test completed successfully!")
-        print(f"  Output saved to: {OUTPUT_FILE}")
-        print("=" * 70)
-        
-    except Exception as e:
-        print(f"\n✗ Test failed with error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    if not UPLOAD_FILE.exists():
+        sys.exit(f"Upload file not found: {UPLOAD_FILE}")
+
+    token = get_identity_token()
+
+    step0_health(token)
+    blob_path = step1_upload(token, UPLOAD_FILE)
+    step2_generate(token, blob_path)
+    step3_download(token, OUTPUT_FILE)
+
+    print(f"\n✅  All done — ringtone saved to {OUTPUT_FILE}")
