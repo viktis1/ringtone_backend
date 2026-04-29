@@ -1,5 +1,6 @@
 import os
 import tempfile
+import subprocess
 from datetime import timedelta
 from fastapi.responses import Response
  
@@ -127,7 +128,29 @@ async def download_file(request: DownloadRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    gpu_info = "No GPU detected"
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            gpu_info = result.stdout
+        else:
+            gpu_info = f"nvidia-smi error: {result.stderr}"
+    except FileNotFoundError:
+        gpu_info = "nvidia-smi not found"
+    except subprocess.TimeoutExpired:
+        gpu_info = "nvidia-smi timed out"
+    except Exception as e:
+        gpu_info = f"Error running nvidia-smi: {str(e)}"
+    
+    return {
+        "status": "ok",
+        "gpu": gpu_info,
+    }
 
 
 if __name__ == "__main__":

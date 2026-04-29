@@ -81,11 +81,11 @@ def step2_generate(token: str, blob_path: str) -> str:
         f"{SERVICE_URL}/generate",
         json={
             "user_id":           USER_ID,
-            "caller_voice_blob": blob_path,
+            "caller_voice_path": blob_path,
             "probability":       0.5,
         },
         headers=headers(token),
-        timeout=120,   # generation can take a while
+        timeout=300,   # generation can take a while (5 min)
     )
     resp.raise_for_status()
     data = resp.json()
