@@ -1,11 +1,9 @@
 import os
 import tempfile
 from datetime import timedelta
-from pathlib import Path
+from fastapi.responses import Response
  
-import google.auth
-import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile
 from google.cloud import storage
 from pydantic import BaseModel
 
@@ -34,133 +32,93 @@ app = FastAPI()
 # GCS helpers
 # ---------------------------------------------------------------------------
 
+def get_file_from_gcs(blob_path: str, suffix: str = "") -> str:
+    """Download a GCS blob to a local temp file, return the local path."""
+    blob = bucket.blob(blob_path)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        blob.download_to_filename(tmp.name)
+        return tmp.name
 
-def _get_fresh_token() -> str:
-    """Return a fresh ADC access token for use in keyless signed URLs."""
-    credentials, _ = google.auth.default()
-    credentials.refresh(google.auth.transport.requests.Request())
-    return credentials.token
- 
- 
-def signed_upload_url(blob_path: str) -> str:
-    return bucket.blob(blob_path).generate_signed_url(
-        version="v4",
-        expiration=URL_TTL,
-        method="PUT",
-        content_type="application/octet-stream",
-        service_account_email=SERVICE_ACCOUNT_EMAIL,
-        access_token=_get_fresh_token(),
-    )
- 
-def signed_download_url(blob_path: str) -> str:
-    return bucket.blob(blob_path).generate_signed_url(
-        version="v4",
-        expiration=URL_TTL,
-        method="GET",
-        service_account_email=SERVICE_ACCOUNT_EMAIL,
-        access_token=_get_fresh_token(),
-    )
- 
-def download_blob_to_tempfile(blob_path: str, suffix: str = "") -> str:
-    """Download a GCS blob to a local temp file; returns the temp file path."""
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    bucket.blob(blob_path).download_to_filename(tmp.name)
-    return tmp.name
- 
-def upload_file_to_gcs(local_path: str, blob_path: str) -> None:
-    bucket.blob(blob_path).upload_from_filename(local_path)
-
-
+def push_file_to_gcs(local_path: str, blob_path: str) -> None:
+    """Upload a local file to GCS."""
+    blob = bucket.blob(blob_path)
+    blob.upload_from_filename(local_path)
 
 
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
 
-class UploadURLRequest(BaseModel):
-    user_id: str
-    filename: str                    # e.g. "caller_voice.wav"
-
 class RingtoneRequest(BaseModel):
     user_id: str
-    caller_voice_blob: str = None    # GCS path set after upload, e.g. "uploads/u1/caller_voice.wav"
+    caller_voice_path: str = None    # GCS path set after upload
     probability: float = 0.5
 
-class DownloadURLRequest(BaseModel):
-    user_id: str
-    filename: str                    # e.g. "ringtone.wav"
+class DownloadRequest(BaseModel):                 
+    blob_path: str                                #   e.g. output_blob from /generate
 
 
 # ---------------------------------------------------------------------------
-# Step 1 — Phone requests a signed upload URL
+# Step 1 — Upload from phone to GSC
 # ---------------------------------------------------------------------------
 
-@app.post("/upload-url")
-async def request_upload_url(req: UploadURLRequest):
-    blob_path = f"{UPLOAD_PREFIX}/{req.user_id}/{req.filename}"
-    return {
-        "upload_url": signed_upload_url(blob_path),
-        "blob_path":  blob_path,
-    }
+@app.post("/upload")
+async def upload_file(file: UploadFile):
+    contents = await file.read()
+    blob = bucket.blob(f"{UPLOAD_PREFIX}/{file.filename}")   # ← use global bucket
+    blob.upload_from_string(contents, content_type=file.content_type)
+    return {"status": "ok", "blob_path": f"{UPLOAD_PREFIX}/{file.filename}"}
 
 
-# ---------------------------------------------------------------------------
-# Step 2 — Generate ringtone (reads caller voice from GCS, writes output back)
-# ---------------------------------------------------------------------------
+# # ---------------------------------------------------------------------------
+# # Step 2 — Generate ringtone (reads caller voice from GCS, writes output back)
+# # ---------------------------------------------------------------------------
 
 @app.post("/generate")
 async def generate_ringtone_endpoint(request: RingtoneRequest):
-    if not 0.0 <= request.probability <= 1.0:
-        raise HTTPException(status_code=400, detail="Probability must be between 0.0 and 1.0")
 
-    try:
-        # Fetch caller voice from GCS into a temp file (if provided)
-        if request.caller_voice_blob:
-            caller_speech = download_blob_to_tempfile(request.caller_voice_blob, suffix=".wav")
-        else:
-            caller_speech = False
+    # Fetch caller voice from GCS into a temp file (if provided)
+    if request.caller_voice_path:
+        caller_speech = get_file_from_gcs(request.caller_voice_path, suffix=".wav")
+    else:
+        caller_speech = False
 
-        # Sample speaker, generate script, synthesise
-        speaker, famous_person, voice_path = sample_speaker(
-            p=request.probability, caller_speech=caller_speech
-        )
-        script = generate_script(
-            receiver="Viktor", caller="Mille",
-            speaker=speaker, famous_person=famous_person,
-        )
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
-            local_output = tmp_out.name
-
+    # Sample speaker, generate script, synthesise
+    speaker, famous_person, voice_path = sample_speaker(
+        p=request.probability, caller_speech=caller_speech
+    )
+    script = generate_script(
+        receiver="Viktor", caller="Mille",
+        speaker=speaker, famous_person=famous_person,
+    )
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
+        local_output = tmp_out.name
         create_ringtone(text=script, reference_wav_path=voice_path, output_path=local_output)
-
-        # Upload finished ringtone to GCS
         output_blob = f"{OUTPUT_PREFIX}/{request.user_id}/{speaker}_ringtone.wav"
-        upload_file_to_gcs(local_output, output_blob)
+        push_file_to_gcs(local_output, output_blob)
+        
 
-        return {
-            "status":        "success",
-            "speaker":       speaker,
-            "famous_person": famous_person,
-            "output_blob":   output_blob,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status":        "success",
+        "speaker":       speaker,
+        "famous_person": famous_person,
+        "output_blob":   output_blob,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Step 3 — Phone requests a signed download URL for the finished ringtone
 # ---------------------------------------------------------------------------
 
-@app.post("/download-url")
-async def request_download_url(req: DownloadURLRequest):
-    blob_path = f"{OUTPUT_PREFIX}/{req.user_id}/{req.filename}"
-    if not bucket.blob(blob_path).exists():
-        raise HTTPException(status_code=404, detail="Ringtone not found")
-    return {"download_url": signed_download_url(blob_path)}
+@app.post("/download")
+async def download_file(request: DownloadRequest):
+    blob = bucket.blob(request.blob_path)
+    contents = blob.download_as_bytes()
+    return Response(
+        content=contents,
+        media_type="audio/wav",
+        headers={"Content-Disposition": f"attachment; filename={request.blob_path.split('/')[-1]}"}
+    )
 
 
 # ---------------------------------------------------------------------------

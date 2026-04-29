@@ -2,10 +2,10 @@
 GCP_tester.py — End-to-end test for the ringtone Cloud Run service.
 
 Flow:
-    0. GET /health                  →  verify service is reachable
-    1. Request a signed upload URL  →  PUT local .mp3 to GCS
-    2. POST /generate               →  trigger ringtone synthesis
-    3. Request a signed download URL →  GET finished .wav to disk
+    0. GET /health              →  verify service is reachable
+    1. POST /upload             →  upload local .mp3 directly
+    2. POST /generate           →  trigger ringtone synthesis
+    3. POST /download           →  fetch finished .wav to disk
 """
 
 import subprocess
@@ -58,27 +58,19 @@ def step0_health(token: str) -> None:
     print(f"      ✓ Health: {resp.json()}")
 
 def step1_upload(token: str, upload_file: Path) -> str:
-    print(f"\n[1/3] Requesting signed upload URL for '{upload_file.name}' ...")
-    resp = requests.post(
-        f"{SERVICE_URL}/upload-url",
-        json={"user_id": USER_ID, "filename": UPLOAD_NAME},
-        headers=headers(token),
-    )
+    print(f"\n[1/3] Uploading '{upload_file.name}' ...")
+    with open(upload_file, "rb") as f:
+        files = {"file": (UPLOAD_NAME, f, "application/octet-stream")}
+        resp = requests.post(
+            f"{SERVICE_URL}/upload",
+            files=files,
+            headers=headers(token),
+        )
     if resp.status_code != 200:
         print(f"      ✗ Error {resp.status_code}: {resp.text}")
     resp.raise_for_status()
     data = resp.json()
-    upload_url = data["upload_url"]
-    blob_path  = data["blob_path"]
-
-    print(f"      Uploading {upload_file} → GCS ...")
-    with open(upload_file, "rb") as f:
-        put = requests.put(
-            upload_url,
-            data=f,
-            headers={"Content-Type": "application/octet-stream"},
-        )
-    put.raise_for_status()
+    blob_path = data["blob_path"]
     print(f"      ✓ Uploaded  (blob: {blob_path})")
     return blob_path
 
@@ -102,23 +94,17 @@ def step2_generate(token: str, blob_path: str) -> str:
     return data["output_blob"]
 
 
-def step3_download(token: str, output_file: Path) -> None:
-    print(f"\n[3/3] Requesting signed download URL for '{OUTPUT_NAME}' ...")
+def step3_download(token: str, output_file: Path, output_blob: str) -> None:
+    print(f"\n[3/3] Downloading '{output_blob}' ...")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     resp = requests.post(
-        f"{SERVICE_URL}/download-url",
-        json={"user_id": USER_ID, "filename": OUTPUT_NAME},
+        f"{SERVICE_URL}/download",
+        json={"blob_path": output_blob},
         headers=headers(token),
     )
     resp.raise_for_status()
-    download_url = resp.json()["download_url"]
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    print(f"      Downloading → {output_file} ...")
-    with requests.get(download_url, stream=True) as r:
-        r.raise_for_status()
-        with open(output_file, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+    with open(output_file, "wb") as f:
+        f.write(resp.content)
     print(f"      ✓ Saved  ({output_file.stat().st_size / 1024:.1f} KB)")
 
 # ---------------------------------------------------------------------------
@@ -133,7 +119,7 @@ if __name__ == "__main__":
 
     step0_health(token)
     blob_path = step1_upload(token, UPLOAD_FILE)
-    step2_generate(token, blob_path)
-    step3_download(token, OUTPUT_FILE)
+    output_blob = step2_generate(token, blob_path)
+    step3_download(token, OUTPUT_FILE, output_blob)
 
     print(f"\n✅  All done — ringtone saved to {OUTPUT_FILE}")
