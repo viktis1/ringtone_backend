@@ -11,6 +11,7 @@ on:
       - 'sample_speaker.py'
       - 'generate_script.py'
       - 'utils.py'
+      - 'main.py'
       - 'requirements.txt'
       - '.github/workflows/docker_image_GHCR.yml'
 
