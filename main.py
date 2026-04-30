@@ -1,7 +1,7 @@
 import os
 import tempfile
 import subprocess
-from datetime import timedelta
+from datetime import datetime, timedelta
 from fastapi.responses import Response
  
 from fastapi import FastAPI, UploadFile
@@ -66,9 +66,13 @@ class DownloadRequest(BaseModel):
 @app.post("/upload")
 async def upload_file(file: UploadFile):
     contents = await file.read()
-    blob = bucket.blob(f"{UPLOAD_PREFIX}/{file.filename}")   # ← use global bucket
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    file_name_without_ext = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
+    file_ext = file.filename.rsplit('.', 1)[1] if '.' in file.filename else ""
+    filename_with_timestamp = f"{file_name_without_ext}_{timestamp}.{file_ext}" if file_ext else f"{file_name_without_ext}_{timestamp}"
+    blob = bucket.blob(f"{UPLOAD_PREFIX}/{filename_with_timestamp}")
     blob.upload_from_string(contents, content_type=file.content_type)
-    return {"status": "ok", "blob_path": f"{UPLOAD_PREFIX}/{file.filename}"}
+    return {"status": "ok", "blob_path": f"{UPLOAD_PREFIX}/{filename_with_timestamp}"}
 
 
 # # ---------------------------------------------------------------------------
@@ -95,7 +99,8 @@ async def generate_ringtone_endpoint(request: RingtoneRequest):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
         local_output = tmp_out.name
         create_ringtone(text=script, reference_wav_path=voice_path, output_path=local_output)
-        output_blob = f"{OUTPUT_PREFIX}/{request.user_id}/{speaker}_ringtone.wav"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
+        output_blob = f"{OUTPUT_PREFIX}/{request.user_id}/{speaker}_ringtone_{timestamp}.wav"
         push_file_to_gcs(local_output, output_blob)
         
 
