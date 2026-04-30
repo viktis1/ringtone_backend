@@ -1,21 +1,24 @@
-FROM nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
+# My local OS is 24.04, but nvidia-l4 only supports CUDA 12.2 and there is no base image from nvidia with CUDA 12.2 and Ubuntu 24.04.
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 
+
 
 
 # Install system dependencies and python
 RUN apt-get update && apt-get install -y \
-    python3.12 \
+    python3.10 \
     python3-pip \
     build-essential \
     git \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -s /usr/bin/python3.12 /usr/bin/python
+    && ln -s /usr/bin/python3.10 /usr/bin/python
 
 WORKDIR /app
 
-# Copy requirements and install dependencies. Without --break-system-packages, I get an error with this base image...
+# Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt 
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt 
 
 # Copy application code
 COPY main.py .
