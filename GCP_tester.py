@@ -85,7 +85,7 @@ def step2_generate(token: str, blob_path: str) -> str:
             "probability":       0.5,
         },
         headers=headers(token),
-        timeout=300,   # generation can take a while (5 min)
+        timeout=1200,   # generation can take a while (5 min)
     )
     resp.raise_for_status()
     data = resp.json()

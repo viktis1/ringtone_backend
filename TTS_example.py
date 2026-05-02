@@ -5,6 +5,7 @@ import torch
 model = VoxCPM.from_pretrained(
   "openbmb/VoxCPM2",
   load_denoiser=False,
+  cache_dir="./weights/",
 )
 
 torch.set_float32_matmul_precision('high') # Does this do something? Idk what it is

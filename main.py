@@ -64,7 +64,7 @@ class DownloadRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/upload")
-async def upload_file(file: UploadFile):
+async def upload_file(file: UploadFile): # This is not actually renaming the file. RN I just give SA storage.objectAdmin role and let it overwrite. You can revert to simpler upload code from git history or fix the broken code below.
     contents = await file.read()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
     file_name_without_ext = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
@@ -73,8 +73,6 @@ async def upload_file(file: UploadFile):
     blob = bucket.blob(f"{UPLOAD_PREFIX}/{filename_with_timestamp}")
     blob.upload_from_string(contents, content_type=file.content_type)
     return {"status": "ok", "blob_path": f"{UPLOAD_PREFIX}/{filename_with_timestamp}"}
-
-
 # # ---------------------------------------------------------------------------
 # # Step 2 — Generate ringtone (reads caller voice from GCS, writes output back)
 # # ---------------------------------------------------------------------------
@@ -98,7 +96,12 @@ async def generate_ringtone_endpoint(request: RingtoneRequest):
     )
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
         local_output = tmp_out.name
-        create_ringtone(text=script, reference_wav_path=voice_path, output_path=local_output)
+        create_ringtone(
+            text=script, 
+            reference_wav_path=voice_path, 
+            output_path=local_output,
+            model_path=GCS_BUCKET + "/weights/VoxCPM2"
+            )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
         output_blob = f"{OUTPUT_PREFIX}/{request.user_id}/{speaker}_ringtone_{timestamp}.wav"
         push_file_to_gcs(local_output, output_blob)
@@ -134,23 +137,16 @@ async def download_file(request: DownloadRequest):
 @app.get("/health")
 async def health():
     gpu_info = "No GPU detected"
-    try:
-        result = subprocess.run(
-            ["nvidia-smi"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            gpu_info = result.stdout
-        else:
-            gpu_info = f"nvidia-smi error: {result.stderr}"
-    except FileNotFoundError:
-        gpu_info = "nvidia-smi not found"
-    except subprocess.TimeoutExpired:
-        gpu_info = "nvidia-smi timed out"
-    except Exception as e:
-        gpu_info = f"Error running nvidia-smi: {str(e)}"
+    result = subprocess.run(
+        ["nvidia-smi"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode == 0:
+        gpu_info = result.stdout
+    else:
+        gpu_info = f"nvidia-smi error: {result.stderr}"
     
     return {
         "status": "ok",
