@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - main
-      - GCP_dependency_workflow
     paths:
       - 'docker/**'
       - 'create_ringtone.py'
       - 'sample_speaker.py'
       - 'generate_script.py'
       - 'utils.py'
+      - 'main.py'
       - 'main.py'
       - 'requirements.txt'
       - '.github/workflows/docker_image_GHCR.yml'
@@ -65,6 +65,27 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Deploy to Staging
+        run: |
+          gcloud run deploy create-ringtone-staging \
+            --image europe-north2-docker.pkg.dev/ringtonechanger-494218/ghcr-mirror/viktis1/create-ringtone:latest \
+            --service-account ghcr-puller@ringtonechanger-494218.iam.gserviceaccount.com \
+            --region europe-west1 \
+            --memory 24Gi \
+            --cpu 6 \
+            --gpu-type nvidia-l4 \
+            --gpu 1 \
+            --no-gpu-zonal-redundancy \
+            --timeout 3600 \
+            --set-env-vars GCS_BUCKET=contact-info-bucket,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+            --no-allow-unauthenticated \
+            --quiet
+      
+      - name: Run Tests
+        run: |
+          pip install -r requirements.txt
+          pytest tests/ -v
+      
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy create-ringtone \
@@ -80,6 +101,5 @@ jobs:
             --set-env-vars GCS_BUCKET=contact-info-bucket,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
             --no-allow-unauthenticated \
             --quiet
-            
-            
+          
             
