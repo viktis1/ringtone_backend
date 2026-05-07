@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/gcs-model-cache
     paths:
       - 'docker/**'
       - 'create_ringtone.py'
