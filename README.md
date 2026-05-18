@@ -79,6 +79,7 @@ pytest tests/ -v
 - [ ] **GKE Exploration**: Explore hosting on GKE instead of Cloud Run
   - [ ] Price comparison (free tier covers cluster management)
   - [ ] Evaluate GPU requirements vs Cloud Run
+  - [] THIS WILL ALLOW ME TO CONTROL THE GPU TIME. Currently on Cloud Run, you pay for idle time, meaning each request takes 5-10 extra min of paid time. In GKE I believe this can be a lot better. 
   
 - [ ] **Emotion Detection**: Implement a feeling detector
   - Analyze input voice clip to detect emotion

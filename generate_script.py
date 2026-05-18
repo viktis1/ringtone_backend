@@ -11,37 +11,42 @@ def generate_script(receiver, caller, speaker, feeling=None, famous_person=True)
     client = genai.Client(api_key=api_key)
 
     if feeling is not None:
-        feeling_prompt = f" The emotion of the speaker should be {feeling}."
+        feeling_prompt = f"The emotion of the speaker should be {feeling}.\n"
     else:
         feeling_prompt = ""
     
     if famous_person == True:
-        famous_person_prompt = (
-            f"The script will be read out by {speaker}. You should write the script in a way that "
-            f"matches the speaking style of {speaker}. The narration should be in 3rd person, as the "
-            f"speaker ({speaker}) is narrating the situation of {caller} calling {receiver}."
+        narrator_instruction = (
+            f"The script is narrated by {speaker} in 3rd person.\n"
+            f"{speaker} should narrate {caller} calling {receiver}.\n"
+            f"Match {speaker}'s speaking style and mannerisms."
         )
     else:
-        famous_person_prompt = (
-            f"The script will be read out by the caller ({caller}) of the phone call. The narration should "
-            f"be in 1st person, as the speaker ({caller}) is narrating the situation of {caller} calling {receiver}."
+        narrator_instruction = (
+            f"The script is narrated by {caller} (the caller) in 1st person.\n"
+            f"{caller} describes their situation calling {receiver}."
         )
 
     prompt = (
-        "I am writing small cute scripts for ringtones and then getting a TTS model to read them with "
-        "the voices. Can you generate a new small messages? Your answer should contain nothing but the "
-        "text that should be read out. The call should be kind of meta talking about the call itself and "
-        "the fact that the person is calling. The script should be around 100 words. The script should also "
-        "be read out to the person who is receiving the call, so it should be written in a way that makes "
-        "sense for the receiver. The script should also mention the name of the caller ({caller}) and the "
-        f"receiver ({receiver}). However, the inclusion of the names should be natural and not forced."
+        "You are a ringtone script writer. Generate a short, cute phone call script.\n\n"
+        "CONTEXT:\n"
+        f"- Caller: {caller}\n"
+        f"- Receiver: {receiver}\n"
+        f"- Narrator/Voice: {speaker}\n\n"
+        "INSTRUCTIONS:\n"
+        f"- Output ONLY the script text (nothing else)\n"
+        f"- The script is meta - it discusses the call itself and the fact that someone is calling\n"
+        f"- Include the caller's name ({caller}) and receiver's name ({receiver}) naturally in the dialogue\n"
+        f"- Keep it around 100 words\n"
+        f"- Write it to be heard by the receiver ({receiver})\n"
+        f"{feeling_prompt}"
+        f"NARRATOR:\n"
+        f"{narrator_instruction}"
     )
     
-    full_prompt = prompt + feeling_prompt + famous_person_prompt
-
     response = client.models.generate_content(
         model="gemini-flash-latest",
-        contents=full_prompt
+        contents=prompt
     )
     return response.text
 

@@ -93,7 +93,7 @@ def _run_generate(job_id: str, request: RingtoneRequest):
             p=request.probability, caller_speech=caller_speech
         )
         script = generate_script(
-            receiver="Viktor", caller="Mille",
+            receiver="Viktor", caller=request.user_id,
             speaker=speaker, famous_person=famous_person,
         )
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
