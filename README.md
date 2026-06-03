@@ -40,8 +40,9 @@ The code is set up for deployment on Google Cloud Run but the generation (step 2
 git clone https://github.com/viktis1/ringtone_backend
 cd ringtone_backend
 conda create -n ringtone python=3.10
-sudo apt install ffmpeg, build-essential
-pip install -r requirements.txt
+conda activate ringtone 
+sudo apt install ffmpeg build-essential
+pip install -r requirements.txt #This is set up to download pyTorch with CUDA. Think about if you want pytorch with CUDA, otherwise please uncomment first line in requirements.txt!
 ```
 
 ### Generate a Ringtone Locally

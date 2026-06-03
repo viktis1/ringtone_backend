@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: ringtone-worker
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: ringtone-pubsub-gcp-auth
+spec:
+  podIdentity:
+    provider: gcp
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob #Jobs are better for event-driven workfloads.
+metadata:
+  name: ringtone-simulator-pubsub-scaler
+spec:
+  pollingInterval: 10 # How often to check for new pubsub messages. 30sec is default
+  maxReplicaCount: 5 # How long before scaling down after the last trigger is removed
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+  jobTargetRef:
+    backoffLimit: 0
+    activeDeadlineSeconds: 300 # 5 minutes
+    template:
+      spec:
+        serviceAccountName: ringtone-worker
+        nodeSelector:
+          cloud.google.com/gke-nodepool: ringtone-cpu-pool
+        tolerations:
+          - key: workload
+            operator: Equal
+            value: ringtone
+            effect: NoSchedule
+        restartPolicy: Never
+        containers:
+          - name: ringtone-worker
+            image: europe-west1-docker.pkg.dev/ringtonechanger-494218/tester/gke-dummy-test:latest # This container needs to acknowledge the message.
+  
+  triggers:
+    - type: gcp-pubsub
+      authenticationRef:
+        name: ringtone-pubsub-gcp-auth
+      metadata:
+        subscriptionName: ringtone-pubsub-upload-message
+        mode: SubscriptionSize
+        value: "1" # For every 10 messages in the subscription, 1 replica will be added. 

@@ -4,3 +4,8 @@ __pycache__/
 ghcr-key.json
 voice_clips/output/
 weights/
+
+
+
+# ignore random test files from READMEs
+test.txt
