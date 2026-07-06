@@ -40,7 +40,7 @@ The code is set up for deployment on Google Cloud Run but the generation (step 2
 git clone https://github.com/viktis1/ringtone_backend
 cd ringtone_backend
 conda create -n ringtone python=3.10
-sudo apt install ffmpeg, build-essential
+sudo apt install ffmpeg build-essential
 pip install -r requirements.txt
 ```
 
