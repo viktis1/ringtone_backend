@@ -16,3 +16,4 @@ gcloud storage buckets create gs://ringtone-bucket-user1 \
     --location=EUROPE-WEST1 \
     --uniform-bucket-level-access \
     --public-access-prevention
+    
